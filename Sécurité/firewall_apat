@@ -1,0 +1,144 @@
+#!/bin/bash
+
+do_start() {
+    
+    iptables -F INPUT 
+    iptables -X INPUT
+    iptables -F OUTPUT
+    iptables -X OUTPUT
+    ip6tables -F INPUT 
+    ip6tables -X INPUT
+    ip6tables -F OUTPUT
+    ip6tables -X OUTPUT
+
+    iptables -P INPUT DROP
+    iptables -P FORWARD DROP
+    iptables -P OUTPUT DROP
+    ip6tables -P INPUT DROP
+    ip6tables -P FORWARD DROP
+    ip6tables -P OUTPUT DROP
+
+    iptables -A INPUT -i lo -j ACCEPT
+    iptables -A OUTPUT -o lo -j ACCEPT
+    ip6tables -A INPUT -i lo -j ACCEPT
+    ip6tables -A OUTPUT -o lo -j ACCEPT
+
+    iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+    ip6tables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+    iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+    ip6tables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+   
+    iptables -A OUTPUT -p tcp --dport 53 -j ACCEPT
+    iptables -A OUTPUT -p udp --dport 53 -j ACCEPT
+    ip6tables -A OUTPUT -p tcp --dport 53 -j ACCEPT
+    ip6tables -A OUTPUT -p udp --dport 53 -j ACCEPT
+
+    iptables -A OUTPUT -p tcp --dport 80 -j ACCEPT
+    iptables -A OUTPUT -p tcp --dport 443 -j ACCEPT
+    iptables -A OUTPUT -p tcp --dport 22 -j ACCEPT
+    ip6tables -A OUTPUT -p tcp --dport 80 -j ACCEPT
+    ip6tables -A OUTPUT -p tcp --dport 443 -j ACCEPT
+    ip6tables -A OUTPUT -p tcp --dport 22 -j ACCEPT
+
+    iptables -A OUTPUT -p icmp -j ACCEPT
+    ip6tables -A OUTPUT -p icmp -j ACCEPT
+
+    iptables -A INPUT -p tcp --dport 5926 -j ACCEPT
+    iptables -A INPUT -p udp --dport 5358 -j ACCEPT
+    iptables -A INPUT -p udp --dport 9793 -j ACCEPT
+
+    iptables -A INPUT -p tcp -m conntrack --ctstate INVALID -m tcp --tcp-flags FIN,PSH,URG FIN,PSH,URG -j DROP
+    iptables -A INPUT -p tcp -m conntrack --ctstate INVALID -m tcp --tcp-flags FIN,SYN,RST,PSH,ACK,URG FIN,SYN,RST,PSH,ACK,URG -j DROP
+    iptables -A INPUT -p tcp -m conntrack --ctstate INVALID -m tcp --tcp-flags FIN,SYN,RST,PSH,ACK,URG NONE -j DROP
+    iptables -A INPUT -p tcp -m conntrack --ctstate INVALID -m tcp --tcp-flags SYN,RST SYN,RST -j DROP
+    iptables -A INPUT -j LOG
+
+    ip6tables -A INPUT -p tcp -m conntrack --ctstate INVALID -m tcp --tcp-flags FIN,PSH,URG FIN,PSH,URG -j DROP
+    ip6tables -A INPUT -p tcp -m conntrack --ctstate INVALID -m tcp --tcp-flags FIN,SYN,RST,PSH,ACK,URG FIN,SYN,RST,PSH,ACK,URG -j DROP
+    ip6tables -A INPUT -p tcp -m conntrack --ctstate INVALID -m tcp --tcp-flags FIN,SYN,RST,PSH,ACK,URG NONE -j DROP
+    ip6tables -A INPUT -p tcp -m conntrack --ctstate INVALID -m tcp --tcp-flags SYN,RST SYN,RST -j DROP
+    ip6tables -A INPUT -j LOG
+
+    iptables -A OUTPUT -p tcp --dport 3000 -j ACCEPT
+
+    iptables -A POSTROUTING -s 10.8.0.0/24 -o ens3 -m comment --comment openvpn-nat-rule -j MASQUERADE
+
+    iptables -I INPUT 1 -m set --match-set crowdsec-blacklists src -j DROP
+    ip6tables -I INPUT 1 -m set --match-set crowdsec6-blacklists src -j DROP
+
+    echo "firewall started [OK]"
+}
+
+do_stop() {
+
+    iptables -F INPUT 
+    iptables -X INPUT
+    iptables -F OUTPUT
+    iptables -X OUTPUT
+    ip6tables -F INPUT 
+    ip6tables -X INPUT
+    ip6tables -F OUTPUT
+    ip6tables -X OUTPUT
+
+    iptables -P INPUT ACCEPT
+    iptables -P OUTPUT ACCEPT
+    iptables -P FORWARD ACCEPT
+    ip6tables -P INPUT ACCEPT
+    ip6tables -P OUTPUT ACCEPT
+    ip6tables -P FORWARD ACCEPT
+
+    iptables -A INPUT -j LOG
+    ip6tables -A INPUT -j LOG
+
+    iptables -A POSTROUTING -s 10.8.0.0/24 -o ens3 -m comment --comment openvpn-nat-rule -j MASQUERADE
+
+    iptables -I INPUT 1 -m set --match-set crowdsec-blacklists src -j DROP
+    ip6tables -I INPUT 1 -m set --match-set crowdsec6-blacklists src -j DROP
+
+
+    echo "firewall stopped [OK]"
+}
+
+do_status() {
+
+    clear
+    echo Status IPV4
+    echo -----------------------------------------------
+    iptables -L -n -v
+    echo
+    echo -----------------------------------------------
+    echo
+    echo status IPV6
+    echo -----------------------------------------------
+    ip6tables -L -n -v
+    echo
+}
+
+case "$1" in
+    start)
+        do_start
+        exit 0
+    ;;
+
+    stop)
+        do_stop
+        exit 0
+    ;;
+
+    restart)
+        do_stop
+        do_start
+        exit 0
+    ;;
+
+    status)
+        do_status
+        exit 0
+    ;;
+
+    *)
+        echo "Usage: /etc/init.d/firewall {start|stop|restart|status}"
+        exit 1
+    ;;
+
+esac
